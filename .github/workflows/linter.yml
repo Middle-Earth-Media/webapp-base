@@ -1,0 +1,24 @@
+name: Lint Code Base
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    name: Lint Code Base
+    runs-on: ubuntu-latest
+    steps:
+    -
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      name: Check out repository
+      uses: actions/checkout@v3
+      with:
+        # Full git history is needed to get a proper list of changed files (only lint new code)
+        fetch-depth: 0
+    -
+      name: Run Linter against code base
+      uses: github/super-linter@v4.9.5
+      env:
+        VALIDATE_ALL_CODEBASE: false
+        VALIDATE_JSCPD: false
+        DEFAULT_BRANCH: main
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
