@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # re-run monthly to keep image fresh with upstream base images
+  schedule:
+  - cron: '0 12 15 * *'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    -
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      name: Check out repository
+      uses: actions/checkout@v3
+    -
+      # QEMU emulation and Buildx required for building multi-platform images
+      name: Set up QEMU
+      uses: docker/setup-qemu-action@v2.0.0
+    -
+      name: Set up Docker Buildx
+      id: buildx
+      uses: docker/setup-buildx-action@v2.0.0
+    -
+      # Caching for quicker subsequent builds
+      name: Cache Docker layers
+      uses: actions/cache@v3.0.5
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+    -
+      name: Login to DockerHub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v2.0.0
+      with:
+        username: ${{ secrets.DOCKERHUB_USER }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    -
+      # Add Docker metadata
+      name: Docker Metadata
+      id: docker_meta
+      uses: docker/metadata-action@v4.0.1
+      with:
+        # list of Docker images to use as base name for tags
+        images: |
+          middleearthmedia/webapp-base
+        # Tag as latest and overwrite
+        flavor: |
+          latest=false
+        tags: |
+          type=raw,value=latest
+    -
+      # Build image once per platform then push to Docker Hub
+      name: Build and Push
+      id: docker_build
+      uses: docker/build-push-action@v3.1.0
+      with:
+        platforms: linux/amd64,linux/arm64,linux/arm/v7
+        builder: ${{ steps.buildx.outputs.name }}
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache
+        context: .
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.docker_meta.outputs.tags }}
+        labels: ${{ steps.docker_meta.outputs.labels }}
